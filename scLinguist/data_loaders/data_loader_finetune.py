@@ -490,15 +490,8 @@ class spMultiDataset(Dataset):
         data = data.squeeze()
 
         data_1, file_index, i = self.parquet_getitem(index, self.len_array_1, self.data_array_1, 6427)
-        if np.isnan(data_1).any():
-            print("1111111111111")
-        # data_1 = np.nan_to_num(data_1)
         data_1 = torch.tensor(data_1, dtype=torch.float32)
         data_1 = data_1.squeeze()
-        # data_1 = citeseq(np.array(data_1))
-        if np.isnan(data_1).any():
-            print("222222222222222")
-        # print(data_1.shape)
 
         fullmask = self.fullmasks[i]
         # print(fullmask)
@@ -512,68 +505,7 @@ class spMultiDataset(Dataset):
         indices = torch.flatten(torch.nonzero(mask, as_tuple=False))
         assert len(mask_position) == len(indices)
 
-        if torch.isnan(data_1).any():
-            print("333333333333333333")
-            # print(list(data_1))
         data_1 = normalization(data_1, low=1e-8, high=1)
-        if torch.isnan(data_1).any():
-            print("66666666666666666666")
-        # data_1 = np.log1p(data_1)
+
 
         return data, data_1, mask
-
-# class scRNADataset(Dataset):
-#     def __init__(self, data_dir, gene_order_path):
-#         self.gene_order_path = gene_order_path
-#         self.data_dir = data_dir
-#         self.files = [f for f in list_files_in_dir(data_dir) if f.endswith(".h5ad")]
-#         gene_order = pd.read_csv(
-#             self.gene_order_path, index_col=0
-#         )
-#         self.gene_order = gene_order["0"]
-#         self.data_array, self.len_array, self.length = self.load_all_data()
-
-
-#     def __len__(self):
-#         return self.length
-
-#     def load_all_data(self):
-#         data_list = []
-#         len_list = []
-#         length = 0
-
-#         for path in self.files:
-#             adata = scanpy.read(path, backed="r", cache=True)
-#             # order and select gene
-#             data_list.append(path)
-
-#             length += adata.shape[0]
-#             len_list.append(length)
-#         data_array = np.array(data_list)
-#         len_array = np.array(len_list)
-
-#         return data_array, len_array, length
-
-#     def __getitem__(self, index):
-#         for i in range(len(self.len_array)):
-#             if index < self.len_array[i]:
-#                 adata = scanpy.read(self.data_array[i], backed="r", cache=True)
-#                 file_index = index if i == 0 else index - self.len_array[i - 1]
-#                 break
-#         adata.var_names = adata.var.feature_id
-#         adata = adata[file_index, self.gene_order]
-#         data = max_min_normalization(adata.X)
-#         data = torch.tensor(data.todense(), dtype=torch.float32)
-#         data = data.squeeze()
-
-#         return data
-
-
-# def dataloader_generator(RNA_path, protein_path, gene_order_path, batch_size=64, num_workers=0):
-#     RNA_dataset = scRNADataset(data_dir=RNA_path, gene_order_path=gene_order_path)
-#     protein_dataset = scADTDataset(data_dir=protein_path)
-#     data_loader = DataLoader(
-#         dataset=dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False
-#     )
-
-#     return data_loader

@@ -19,15 +19,6 @@ from model.tokenizer import (
 from sklearn.metrics.pairwise import cosine_similarity
 
 
-# from rtdl_num_embeddings import (
-#     LinearReLUEmbeddings,
-#     PeriodicEmbeddings,
-#     PiecewiseLinearEncoding,
-#     PiecewiseLinearEmbeddings,
-#     compute_bins,
-# )
-
-
 class FeatureExpander(nn.Module):
     def __init__(self, p, d):
         super(FeatureExpander, self).__init__()
@@ -82,33 +73,20 @@ class scHeyna(nn.Module):
     def __init__(self, config, emb_dropout=0.0, tie_embed=False):
         super().__init__()
         self.to_vector = nn.Linear(1, config.d_model)
-        # self.to_vector = LinearReLUEmbeddings(config.max_seq_len, config.d_model)
-        # self.to_vector = PeriodicEmbeddings(
-        #     config.max_seq_len, config.d_model, lite=False
-        # )
-        # self.to_vector = AutoDiscretizationBlock(config.d_model)
-        # self.value_emb = FeatureExpander(confi.max_seq_len, config.d_model)
         self.transformer = HeynaModel(config)
         self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
         self.dropout = nn.Dropout(emb_dropout)
-        # self.to_bin = nn.Linear(config.d_model, 1) if not tie_embed else None
-        # self.pos_emb = nn.Embedding(config.max_seq_len, config.d_model)
 
     def forward(self, x, return_encodings=False):
         b, n = x.shape[0], x.shape[1]
         if len(x.shape) < 3:
-            # x = self.value_emb(x)
             x = torch.unsqueeze(x, dim=2)
             x = self.to_vector(x)
-            # id = torch.arange(0, n).expand((b,n)).to(x.device)
-            # pos = self.pos_emb(id)
-            # x = torch.concat([x, pos], axis=2)
-            # x = 0.1*pos + 0.9*x
+
         x = self.dropout(x)
         x = self.transformer(inputs_embeds=x)
         if return_encodings:
             return x
-        # return torch.squeeze(self.to_out(x)), torch.squeeze(self.to_bin(x))
         return torch.squeeze(self.to_out(x))
 
 
@@ -223,10 +201,6 @@ class scTrans(pl.LightningModule):
 
         self.load_encoder_decoder(encoder_ckpt_path, decoder_ckpt_path)
 
-        # self.freeze_model(self.encoder)
-        # self.freeze_model(self.decoder)
-        # self.freeze_epochs = freeze_epochs
-
         self.cos_gene = nn.CosineSimilarity(dim=0, eps=1e-8)
         self.cos_cell = nn.CosineSimilarity(dim=1, eps=1e-8)
         self.epoch_train_loss_list = []
@@ -269,21 +243,6 @@ class scTrans(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
         return optimizer
 
-    # def on_train_epoch_start(self):
-    #     if self.current_epoch == self.freeze_epochs:
-    #         self.unfreeze_model(self.encoder)
-    #         self.unfreeze_model(self.decoder)
-
-    # @staticmethod
-    # def freeze_model(model):
-    #     for param in model.parameters():
-    #         param.requires_grad = False
-
-    # @staticmethod
-    # def unfreeze_model(model):
-    #     for param in model.parameters():
-    #         param.requires_grad = True
-
     def recon_loss(self, data, pred_data, mask_idx=None):
         if mask_idx is None:
             return nn.functional.mse_loss(pred_data, data, reduction="mean")
@@ -292,9 +251,6 @@ class scTrans(pl.LightningModule):
             return loss1
 
     def masked_recon_loss(self, data, pred_data, mask_idx=None):
-        # masked_data_weight = 1
-        # w_nums = mask_idx * masked_data_weight + (~mask_idx) * (1 - masked_data_weight)
-        # recon_loss =  torch.mul(w_nums, nn.functional.mse_loss(pred_data, data, reduction='none')).mean()
         masked_squared_error = ((data - pred_data) ** 2) * mask_idx
         summed_error_per_row = masked_squared_error.sum(dim=1)
         mask_count_per_row = mask_idx.sum(dim=1).float()
@@ -391,9 +347,6 @@ class scTrans(pl.LightningModule):
                 logger=True,
                 sync_dist=True,
             )
-        # mean = np.mean(self.embed.detach().to("cpu").numpy(), axis=1)
-        # if len(mean.shape) == 1:
-        #     mean = mean.reshape([1, mean.shape[0]])
         self.test_emb_list.append(self.embed.detach().to("cpu").numpy())
         self.test_emb_mlp_list.append(self.embed_mlp.detach().to("cpu").numpy())
         self.recon_list.append(self.recon.detach().to("cpu").numpy())
@@ -401,13 +354,8 @@ class scTrans(pl.LightningModule):
         return {"test_loss": recon_loss}
 
     def on_test_epoch_end(self):
-        # recon = np.concatenate(self.recon_list, axis=0)
-        # del recon
-
         test_emb_1 = np.concatenate(self.test_emb_list, axis=0)
         emb_mean = np.mean(test_emb_1, axis=1)
-        # adata = self.cluster(emb_mean, reso=0.1)
-        # self.plot_umap(adata)
         for i in range(min(10, len(self.embed))):
             self.plot_gene_umap(self.embed[i].detach().to("cpu").numpy())
             self.plot_corr_gene(self.embed[i].detach().to("cpu").numpy())
@@ -415,17 +363,10 @@ class scTrans(pl.LightningModule):
         test_emb_mlp = np.concatenate(self.test_emb_mlp_list, axis=0)
         test_emb_mlp = test_emb_mlp[:, self.mask_idx[0, :].detach().to("cpu").numpy(), :]
         emb_mean = np.mean(test_emb_mlp, axis=1)
-        # adata = self.cluster(emb_mean, reso=0.1)
-        # self.plot_umap(adata, name="Umap-Cell-Protein")
         for i in range(min(3, len(self.embed_mlp))):
-            # print(self.mask_idx[0,:].detach().to("cpu").numpy().shape)
-            # print(self.embed_mlp[i].shape)
-            # print(np.sum(self.mask_idx[0,:].detach().to("cpu").numpy()))
-            # print(self.embed_mlp[i][self.mask_idx[0,:].detach().to("cpu").numpy(),:].detach().to("cpu").numpy().shape)
             self.plot_gene_umap(
                 self.embed_mlp[i][self.mask_idx[0, :].detach().to("cpu").numpy(), :].detach().to("cpu").numpy(),
                 name="Umap-Protein")
-            # self.plot_corr_gene(self.embed_mlp[i].detach().to("cpu").numpy(), name="Corr-Protein")
 
         self.test_emb_list = []
         self.test_pred = []
@@ -469,15 +410,7 @@ class scTrans(pl.LightningModule):
         CD4_corr = CD4_corr.reshape(-1, 1)
         plt.figure(figsize=(6, 6))
         fig = sns.clustermap(CD4_corr, col_cluster=False, row_cluster=True)
-        # self.logger.experiment.log({name: wandb.Image(fig.fig, caption=name)})
-        # table = wandb.Table(
-        #     dataframe=pd.DataFrame(
-        #         {"max_corr_gene": max_corr, "min_corr_gene": min_corr}
-        #     )
-        # )
         print(pd.DataFrame({"max_corr_gene": max_corr, "min_corr_gene": min_corr}))
-        # self.logger.experiment.log({"gene_correlations": table})
         self.logger.experiment.add_figure(name, fig.fig)
-        # self.logger.experiment.log({"Corr_heat": wandb.Image(fig, caption="corr_gene")})
         self.logger.experiment.add_text("Max corr", ', '.join(max_corr))
         self.logger.experiment.add_text("Min corr", ', '.join(min_corr))

@@ -139,63 +139,6 @@ class scMultiDataset(Dataset):
         return data_1, mask_idx, 1
 
 
-# class scRNADataset(Dataset):
-#     def __init__(self, data_dir, gene_order_path):
-#         self.gene_order_path = gene_order_path
-#         self.data_dir = data_dir
-#         self.files = [f for f in list_files_in_dir(data_dir) if f.endswith(".h5ad")]
-#         gene_order = pd.read_csv(
-#             self.gene_order_path, index_col=0
-#         )
-#         self.gene_order = gene_order["0"]
-#         self.data_array, self.len_array, self.length = self.load_all_data()
-
-
-#     def __len__(self):
-#         return self.length
-
-#     def load_all_data(self):
-#         data_list = []
-#         len_list = []
-#         length = 0
-
-#         for path in self.files:
-#             adata = scanpy.read(path, backed="r", cache=True)
-#             # order and select gene
-#             data_list.append(path)
-
-#             length += adata.shape[0]
-#             len_list.append(length)
-#         data_array = np.array(data_list)
-#         len_array = np.array(len_list)
-
-#         return data_array, len_array, length
-
-#     def __getitem__(self, index):
-#         for i in range(len(self.len_array)):
-#             if index < self.len_array[i]:
-#                 adata = scanpy.read(self.data_array[i], backed="r", cache=True)
-#                 file_index = index if i == 0 else index - self.len_array[i - 1]
-#                 break
-#         adata.var_names = adata.var.feature_id
-#         adata = adata[file_index, self.gene_order]
-#         data = max_min_normalization(adata.X)
-#         data = torch.tensor(data.todense(), dtype=torch.float32)
-#         data = data.squeeze()
-
-#         return data
-
-
-# def dataloader_generator(RNA_path, protein_path, gene_order_path, batch_size=64, num_workers=0):
-#     RNA_dataset = scRNADataset(data_dir=RNA_path, gene_order_path=gene_order_path)
-#     protein_dataset = scADTDataset(data_dir=protein_path)
-#     data_loader = DataLoader(
-#         dataset=dataset, batch_size=batch_size, num_workers=num_workers, shuffle=False
-#     )
-
-#     return data_loader
-
-
 def clr(adata: AnnData, inplace: bool = True, axis: int = 0) -> Union[None, AnnData]:
     """
     Apply the centered log ratio (CLR) transformation
@@ -351,16 +294,11 @@ class paProteinDataset(Dataset):
                  reverse_vocab_path='./tokenizer/reverse_vocab.json',
                  origin_vocab_path='./tokenizer/vocab.json',
                  protein_count=6428):
-        # print('here')
-        # self.gene_order_path = gene_order_path
         self.data_dir = data_dir
         self.protein_count = protein_count
         self.reverse_vocab_path = reverse_vocab_path
         self.origin_vocab_path = origin_vocab_path
-        # import json
-        # with open('./process.json', 'r') as f:
-        #     a = json.load(f)
-        # self.dicts = a
+
         self.files = [sd for sd in fetch_files_in_subdirs(data_dir) if sd.endswith(".parquet")]
         self.files.sort(reverse=False)
         self.masks = []
@@ -368,31 +306,12 @@ class paProteinDataset(Dataset):
             last = fs.split('/')[-2]
             num = last.split('_')[1]
             self.masks.append(mask_dir + 'mask_' + str(num) + '_no_zero.json')
-        # from pathlib import Path
-        # input_dir = Path(mask_dir)
-        # self.masks = [f for f in input_dir.glob("*.json")]
-        # self.masks = [f for f in list_files_in_dir(mask_dir) if f.endswith(".json")]
-        # self.masks = sorted(self.masks, key=extract_number)
-        # self.masks.sort(reverse=False)
-        # self.files = [f for f in list_files_in_dir(data_dir) if f.endswith(".h5ad")]
-        # gene_order = pd.read_csv(self.gene_order_path, index_col=0)
-        # self.gene_order = gene_order["0"]
         (
             self.data_array,
             self.len_array,
             self.length,
         ) = self.load_all_data()
         self.fullmasks = self.load_mask_data()
-        # self.data_arrayMASK, self.len_arrayMASK, self.lengthMASK = self.load_mask_data()
-
-        # self.fillers = []
-        # for i in range(6794):
-        #     if str(i) in self.dicts.keys() and self.dicts[str(i)]['avg'] >= 0:
-        #         self.fillers.append(self.dicts[str(i)]['avg'])
-        #     else:
-        #         self.fillers.append(0.0)
-        # self.fillers = normalization(torch.tensor(self.fillers))
-        # print(list(self.fillers))
 
     def __len__(self):
         return self.length
@@ -436,16 +355,6 @@ class paProteinDataset(Dataset):
             # print(path)
             with open(path, "r") as f:
                 mask = json.load(f)
-            # adata = scanpy.read(path)
-            # adata.var_names = adata.var.feature_id
-            # s = "CD57 CD45 CD19 CD45RA CD4 CD8 pSTAT5 CD16 CD127 CD1c CD123 CD66b pSTAT1 CD27 pp38 pSTAT3 pMAPKAP2 CD14 CD56 pPLCg2 CD25 pERK1_2 CD3 CD38 CD161 pS6"
-            # s = "CD1a CD1c CD2 CD4 CD5 CD7 CD10 CD11b CD11c CD13 CD14 CD16 CD19 CD20 CD22 CD25 CD26 CD33 CD34 CD36 CD38 CD41 CD42b CD45 CD45RA CD45RO CD48 CD61 CD64 CD66b CD69 CD71 CD99 CD123 CD161 CD163 CD177 IgD IgM CD43 CD140B CD49d CD49f CD54 CD31 CD80 CD86 CD47 CD40 CD154 CD52 CD105 CD44 Podoplanin EGFR CD146 CD32 CD27 CD39 CX3CR1 CD21 CD11a CD235ab CD106 FceRIalpha CD83 CD59 CD29 CD49b CD98 CD55 CD18 CD28 CD204 CD63 CD72 MERTK CD93 CD49a CD9 CD110 CD109 GP130 CD164 CD142 CD45RB CLEC12A CD46 CD94 IgE CD162 CD84 CD23 GPR56 CD82 NKp80 CD131 CD74 CD116 CD37 CD321 CD30 XCR1 CD62E CCR10 CD24 CD70 CD133 C5L2 CD62L CD1d CD35"
-            # pros10 = s.split()
-            # adata = adata[:, pd.Series(pros10)]
-            # adata = adata[:, self.gene_order]
-            # adata = adata[:, :]
-            # data = max_min_normalization(adata.X)
-            # order and select gene
             dataMatrix = np.array(list(mask.values()), dtype=object)
             data_list.append(dataMatrix)
 
@@ -474,22 +383,12 @@ class paProteinDataset(Dataset):
 
         # 直接通过genes数组作为索引数组索引data，对应位置就是有表达量的位置
         data[pgenes] = pexps
-        # assert len(pexps) == len(fullmask[str(file_index)])
-        # data[fullmask[str(file_index)]] = pexps
-        # nan2zero
+
         data = np.nan_to_num(data)
         data = torch.tensor(data, dtype=torch.float32)
         data = data.squeeze()
         tech = data[-1]
         data = data[:-1]
-
-        # if tech.item() == 0.0:
-        #     data = cytof(data)
-        # elif tech.item() == 1.0:
-        #     data = citeseq(np.array(data))
-        # print(tech)
-        # print(data)
-        # print(data.shape) 6794
 
         mask_position = np.array(fullmask[file_index][:-1], dtype=int)
         mask = np.zeros(len(data))
@@ -499,46 +398,7 @@ class paProteinDataset(Dataset):
 
         indices = torch.flatten(torch.nonzero(mask, as_tuple=False))
         assert len(mask_position) == len(indices)
-        # print(indices)
-        # for pos in indices:
-        #     # print(pos)
-        #     if str(pos.item()) in self.dicts.keys():
-        #         data[pos.item()] = self.dicts[str(pos.item())]['avg']
-        #         # print(self.dicts[str(pos.item())]['avg'])
-        #     # else:
-        #     #     data[pos.item()] = 0.0
-        # for pos in range(data.shape[0]):
-        #     # undetected known
-        #     if pos not in indices and str(pos) in self.dicts.keys():
-        #         data[pos] = self.dicts[str(pos)]['avg'] + torch.rand(1).item()
-        #         # print(data[pos])
-        #     elif pos not in indices and str(pos) not in self.dicts.keys():
-        #         data[pos] = torch.rand(1).item()
-
-        # data = normalization(data)
-        # data = np.log1p(data)
-        # for pos in range(data.shape[0]):
-        #     # undetected known
-        #     if pos not in indices and str(pos) in self.dicts.keys():
-        #         # data[pos] = self.dicts[str(pos)]['avg'] + torch.rand(1).item()
-        #         data[pos] = 0.0
-        #         # print(data[pos])
-        #     elif pos not in indices and str(pos) not in self.dicts.keys():
-        #         data[pos] = 0.0
-        #         # data[pos] = torch.rand(1).item() * 5
-
-        if torch.isnan(data).any():
-            print("hahaha")
-            print(list(data))
         data = normalization(data)
-        # data = np.log1p(data)
-        if torch.isnan(data).any():
-            print("hahaha")
-            print(list(data))
-        # for pos in range(data.shape[0]):
-        #     if pos not in indices:
-        #         data[pos] = 0.0
-        # print(data)
         return (data, mask, tech)
 
 
@@ -547,44 +407,20 @@ class paTESTProteinDataset_cytof(Dataset):
                  reverse_vocab_path='./tokenizer/reverse_vocab.json',
                  origin_vocab_path='./tokenizer/vocab.json',
                  mask_test_path='./mask_test_cytof.npy', protein_count=6428):
-        # print('here')
-        # self.gene_order_path = gene_order_path
         self.data_dir = data_dir
         self.protein_count = protein_count
         self.reverse_vocab_path = reverse_vocab_path
         self.origin_vocab_path = origin_vocab_path
-        # import json
-        # with open('./process.json', 'r') as f:
-        #     a = json.load(f)
-        # self.dicts = a
         self.files = [sd for sd in fetch_files_in_subdirs(data_dir) if sd.endswith(".parquet")]
         self.files.sort(reverse=False)
-        # self.masks = [f for f in list_files_in_dir(data_dir) if f.endswith(".json")]
-        # self.masks.sort(reverse=True)
         self.mask = np.load(mask_test_path)
         self.mask = torch.tensor(self.mask, dtype=torch.int)
         self.mask = self.mask.squeeze()
-        # self.files = [f for f in list_files_in_dir(data_dir) if f.endswith(".h5ad")]
-        # gene_order = pd.read_csv(self.gene_order_path, index_col=0)
-        # self.gene_order = gene_order["0"]
         (
             self.data_array,
             self.len_array,
             self.length,
         ) = self.load_all_data()
-        # self.fullmasks = self.load_mask_data()
-        # self.data_arrayMASK, self.len_arrayMASK, self.lengthMASK = self.load_mask_data()
-
-        # self.reverse_vocab_path = reverse_vocab_path
-        # self.origin_vocab_path = origin_vocab_path
-        # self.fillers = []
-        # for i in range(6794):
-        #     if str(i) in self.dicts.keys() and self.dicts[str(i)]['avg'] >= 0:
-        #         self.fillers.append(self.dicts[str(i)]['avg'])
-        #     else:
-        #         self.fillers.append(0.0)
-        # self.fillers = normalization(torch.tensor(self.fillers))
-        # print(list(self.fillers))
 
     def __len__(self):
         return self.length
@@ -645,11 +481,6 @@ class paTESTProteinDataset_cytof(Dataset):
         tech = data[-1]
         data = data[:-1]
 
-        # data = cytof(data)
-        # print(tech)
-        # print(data)
-        # print(data.shape) 6794
-
         mask_position = np.array(self.mask[:-1])
         mask = np.zeros(len(data))
         mask[mask_position] = 1
@@ -658,16 +489,7 @@ class paTESTProteinDataset_cytof(Dataset):
 
         indices = torch.flatten(torch.nonzero(mask, as_tuple=False))
         assert len(mask_position) == len(indices)
-
-        if torch.isnan(data).any():
-            print("hahaha")
-            print(list(data))
         data = normalization(data)
-        # data = np.log1p(data)
-        # for pos in range(data.shape[0]):
-        #     if pos not in indices:
-        #         data[pos] = 0.0
-        # print(data)
         return (data, mask, tech)
 
 
@@ -676,44 +498,20 @@ class paTESTProteinDataset_citeseq(Dataset):
                  reverse_vocab_path='./tokenizer/reverse_vocab.json',
                  origin_vocab_path='./tokenizer/vocab.json',
                  mask_test_path='./mask_test_citeseq.npy', protein_count=6428):
-        # print('here')
-        # self.gene_order_path = gene_order_path
         self.data_dir = data_dir
         self.protein_count = protein_count
         self.reverse_vocab_path = reverse_vocab_path
         self.origin_vocab_path = origin_vocab_path
-        # import json
-        # with open('./process.json', 'r') as f:
-        #     a = json.load(f)
-        # self.dicts = a
         self.files = [sd for sd in fetch_files_in_subdirs(data_dir) if sd.endswith(".parquet")]
         self.files.sort(reverse=False)
-        # self.masks = [f for f in list_files_in_dir(data_dir) if f.endswith(".json")]
-        # self.masks.sort(reverse=True)
         self.mask = np.load(mask_test_path)
         self.mask = torch.tensor(self.mask, dtype=torch.int)
         self.mask = self.mask.squeeze()
-        # self.files = [f for f in list_files_in_dir(data_dir) if f.endswith(".h5ad")]
-        # gene_order = pd.read_csv(self.gene_order_path, index_col=0)
-        # self.gene_order = gene_order["0"]
         (
             self.data_array,
             self.len_array,
             self.length,
         ) = self.load_all_data()
-        # self.fullmasks = self.load_mask_data()
-        # self.data_arrayMASK, self.len_arrayMASK, self.lengthMASK = self.load_mask_data()
-
-        # self.reverse_vocab_path = reverse_vocab_path
-        # self.origin_vocab_path = origin_vocab_path
-        # self.fillers = []
-        # for i in range(6794):
-        #     if str(i) in self.dicts.keys() and self.dicts[str(i)]['avg'] >= 0:
-        #         self.fillers.append(self.dicts[str(i)]['avg'])
-        #     else:
-        #         self.fillers.append(0.0)
-        # self.fillers = normalization(torch.tensor(self.fillers))
-        # print(list(self.fillers))
 
     def __len__(self):
         return self.length
