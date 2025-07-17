@@ -1,27 +1,16 @@
 import json
 import os
-import random
-import re
 import pyarrow.parquet as pq
 import scanpy
-import anndata
 import numpy as np
 import pandas as pd
 from torch.utils.data import DataLoader, Dataset
-
-import scipy.sparse as sp
-from scipy.stats import bernoulli, beta
-from typing import Optional, Iterable, Tuple, Union
-from numbers import Integral, Real
+from typing import Union
 from warnings import warn
 
 from scipy.sparse import issparse, csc_matrix, csr_matrix
-from sklearn.mixture import GaussianMixture
-from sklearn.decomposition import PCA
-from sklearn.linear_model import LinearRegression
 from anndata import AnnData
 import torch
-from torch.utils.data.distributed import DistributedSampler
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))
 RANK = int(os.getenv("RANK", -1))
@@ -52,7 +41,6 @@ def max_min_normalization_with_nan(data):
 
 
 def find_parquet_files(root_folder, suffix=".parquet"):
-    """ 在指定根文件夹及其子文件夹中查找所有的 .parquet 文件 """
     parquet_files = []
     for root, dirs, files in os.walk(root_folder):
         for file in files:
@@ -652,3 +640,131 @@ def dataloader_generator(root_path, gene_order_path, batch_size=64, num_workers=
     )
 
     return data_loader
+
+
+class spMultiDataset(Dataset):
+    def __init__(self, data_dir_1, data_dir_2, mask_dir):
+        self.data_dir_1 = data_dir_1
+        self.data_dir_2 = data_dir_2
+        self.files_1 = find_parquet_files(data_dir_1)
+        print(self.files_1)
+        self.files_1.sort(reverse=True)
+
+        self.files_2 = find_parquet_files(data_dir_2)
+        print(self.files_2)
+        self.files_2.sort(reverse=True)
+        self.masks = []
+        for fs in self.files_2:
+            print(fs)
+            last = fs.split("/")[-1]
+            num = last.split("_")[1].split(".")[0]
+            self.masks.append(mask_dir + "ADT_" + str(num) + ".json")
+
+        (
+            self.data_array,
+            self.len_array,
+            self.data_array_1,
+            self.len_array_1,
+            self.length,
+        ) = self.load_all_data()
+        self.fullmasks = self.load_mask_data()
+
+    def __len__(self):
+        return self.length
+
+    def get_reverse_vocab(self):
+        with open(self.reverse_vocab_path, "r") as f:
+            vocab = json.load(f)
+        return {int(k): v for k, v in vocab.items()}
+
+    def get_origin_vocab(self):
+        with open(self.origin_vocab_path, "r") as f:
+            vocab = json.load(f)
+        return vocab
+
+    def get_row(self, file_index):
+        group_id = file_index / 1000
+        row_id = file_index % 1000
+        return int(group_id), int(row_id)
+
+    def load_all_data(self):
+        data_list = []
+        len_list = []
+        length = 0
+
+        for path in self.files_1:
+            pdata = pq.ParquetFile(path)
+            data_list.append(path)
+
+            length += pdata.scan_contents()
+            len_list.append(length)
+        data_array = np.array(data_list)
+        len_array = np.array(len_list)
+
+        data_list = []
+        len_list = []
+        length = 0
+
+        for path in self.files_2:
+            pdata = pq.ParquetFile(path)
+            data_list.append(path)
+
+            length += pdata.scan_contents()
+            len_list.append(length)
+        data_array_1 = np.array(data_list)
+        len_array_1 = np.array(len_list)
+
+        return data_array, len_array, data_array_1, len_array_1, length
+
+    def load_mask_data(self):
+        data_list = []
+
+        for path in self.masks:
+            with open(path, "r") as f:
+                mask = json.load(f)
+            dataMatrix = np.array(list(mask.values()), dtype=object)
+            data_list.append(dataMatrix)
+
+        data_arrayMASK = np.array(data_list, dtype=object)
+        return data_arrayMASK
+
+    def parquet_getitem(self, index, len_array, data_array, data_count):
+        for i in range(len(len_array)):
+            if index < len_array[i]:
+                pdata = pq.ParquetFile(data_array[i])
+                file_index = index if i == 0 else index - len_array[i - 1]
+                break
+        groups, rows = self.get_row(file_index)
+        pdata = pdata.read_row_groups([groups])
+
+        pgenes = pdata["genes"][rows].as_py()
+        pexps = pdata["expressions"][rows].as_py()
+
+        data = np.zeros(data_count)
+        data[pgenes] = pexps
+        return data, file_index, i
+
+    def __getitem__(self, index):
+        data, _, _ = self.parquet_getitem(index, self.len_array, self.data_array, 19202)
+        data = data.reshape(1, -1)
+        data = torch.tensor(data, dtype=torch.float32)
+        data = data.squeeze()
+
+        data_1, file_index, i = self.parquet_getitem(index, self.len_array_1, self.data_array_1, 6427)
+        data_1 = torch.tensor(data_1, dtype=torch.float32)
+        data_1 = data_1.squeeze()
+
+        fullmask = self.fullmasks[i]
+        mask_position = np.array(fullmask[int(file_index)][:-1], dtype=int)
+        mask = np.zeros(len(data_1))
+        mask[mask_position] = 1
+        mask = torch.tensor(mask, dtype=torch.int)
+        mask = mask.squeeze()
+
+        indices = torch.flatten(torch.nonzero(mask, as_tuple=False))
+        assert len(mask_position) == len(indices)
+
+        data_1 = normalization(data_1, low=1e-8, high=1)
+
+
+        return data, data_1, mask

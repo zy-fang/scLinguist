@@ -5,52 +5,15 @@ warnings.filterwarnings("ignore")
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 import torch
 from torch.utils.data import DataLoader, TensorDataset
-import torch.nn.functional as F
-import time
-import math
-import wandb
-import scanpy as sc
-import pandas as pd
-from pathlib import Path
-from typing import Literal, Union
-import numpy as np
-from anndata import AnnData
-import logging
-import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
-from torch.utils.data.distributed import DistributedSampler
-# import pytorch_lightning as pl
 import pytorch_lightning as pl
-# from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint
-from data_loaders.data_loader_pretrain import paProteinDataset, paTESTProteinDataset_citeseq, paTESTProteinDataset_cytof
-from utils import (
-    select_device,
-    apply_noise,
-    increment_path,
-    torch_distributed_zero_first,
-    reduce_value,
-    save_checkpoint,
-    epoch_time,
-)
-from utils import (
-    count_parameters,
-    apply_noise,
-    save_checkpoint,
-    get_std_logging,
-    mask_tensor,
-    setup_seed,
-    mask_generator,
-    pretext_generator,
-)
+from data_loaders.data_loader_pretrain import paProteinDataset, paTESTProteinDataset_citeseq
 import argparse
-from tqdm import tqdm
 from model.model_citeseq_notech import scTrans
 from model.configuration_hyena import HyenaConfig
 
 LOCAL_RANK = int(os.getenv("LOCAL_RANK", -1))
-# LOCAL_RANK = 0
 RANK = int(os.getenv("RANK", -1))
 WORLD_SIZE = int(os.getenv("WORLD_SIZE", -1))
 print("LOCAL RANK:", LOCAL_RANK)
@@ -102,16 +65,21 @@ def parser_args():
         "--dec_depth", type=int, default=1, help="sequence length of decoder"
     )
     parser.add_argument(
-        "--enc_dim", type=int, default=32, help="latend dimension of each token"
+        "--enc_dim", type=int, default=32, help="latent dimension of each token"
     )
     parser.add_argument(
-        "--dec_dim", type=int, default=32, help="latend dimension of each token"
+        "--dec_dim", type=int, default=32, help="latent dimension of each token"
     )
     parser.add_argument(
         "--position_emb_dim",
         type=int,
         default=5,
         help="dimension of the positional encoding (`emb_dim` - 1) // 2 is the number of bands",
+    )
+    parser.add_argument(
+        "--checkpoint_path",
+        type=str,
+        default=None,
     )
     parser.add_argument("--wandb_name", type=str, default="test", help="wanbd name")
 
@@ -184,7 +152,6 @@ def main(config):
         batch_size=config["batch_size"],
         shuffle=False,
         sampler=test_sampler,
-        # collate_fn=collator,
         drop_last=False,
         num_workers=nw,
         pin_memory=True,
@@ -192,18 +159,18 @@ def main(config):
 
     # Create model
     enc_config_model = HyenaConfig(
-        d_model=config["enc_dim"],  # embedding 的维度
-        emb_dim=config["position_emb_dim"],  # 必须是奇数且大于3，位置编码相关
-        max_seq_len=config["enc_vocab_len"],  # 2000
-        vocab_len=config["enc_vocab_len"],  # 19202
+        d_model=config["enc_dim"],  
+        emb_dim=config["position_emb_dim"], 
+        max_seq_len=config["enc_vocab_len"], 
+        vocab_len=config["enc_vocab_len"],
         n_layer=config["enc_depth"],
         output_hidden_states=False,
     )
     dec_config_model = HyenaConfig(
-        d_model=config["dec_dim"],  # embedding 的维度
-        emb_dim=config["position_emb_dim"],  # 必须是奇数且大于3，位置编码相关
-        max_seq_len=config["dec_vocab_len"],  # 2000
-        vocab_len=config["dec_vocab_len"],  # 19202
+        d_model=config["dec_dim"],
+        emb_dim=config["position_emb_dim"],
+        max_seq_len=config["dec_vocab_len"],
+        vocab_len=config["dec_vocab_len"],
         n_layer=config["dec_depth"],
         output_hidden_states=False,
     )
@@ -224,9 +191,6 @@ def main(config):
     )
 
     trainer = pl.Trainer(
-        # precision=16,
-        # accelerator='gpu', devices=[2,3],
-        # accelerator=None,
         strategy="ddp_find_unused_parameters_true", accelerator="gpu", devices=config["device"],
         logger=wandb_logger,
         max_epochs=config["epochs"],

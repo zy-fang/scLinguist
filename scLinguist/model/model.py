@@ -1,33 +1,43 @@
 import torch
-from math import ceil
-from typing import Optional
-import numpy as np
-import pandas as pd
 import scanpy as sc
-import seaborn as sns
-import matplotlib.pyplot as plt
 from torch import nn as nn
-
 import pytorch_lightning as pl
-import torch.nn.functional as F
 from model.modeling_hyena import HeynaModel
-from model.tokenizer import (
-    mask_data,
-    data_tokenizer_padding,
-    hierarchical_bayesian_downsampling,
-)
-from sklearn.metrics.pairwise import cosine_similarity
+from model.tokenizer import mask_data
 
 
-class scHeyna(nn.Module):
+class scHeyna_dec(nn.Module):
     def __init__(self, config, emb_dropout=0.0, tie_embed=False):
         super().__init__()
         self.to_vector = nn.Linear(1, config.d_model)
+        self.to_vector_tech = nn.Linear(1, config.d_model)
         self.transformer = HeynaModel(config)
         self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
         self.dropout = nn.Dropout(emb_dropout)
 
-    def forward(self, x, return_encodings=False):
+    def forward(self, inputs, return_encodings=False):
+        x = inputs[:, :, :]
+        b, n = x.shape[0], x.shape[1]
+        if len(x.shape) < 3:
+            x = torch.unsqueeze(x, dim=2)
+            x = self.to_vector(x)
+        x = self.dropout(x)
+        x = self.transformer(inputs_embeds=x)
+        if return_encodings:
+            return x
+        return torch.squeeze(self.to_out(x))
+
+class scHeyna_enc(nn.Module):
+    def __init__(self, config, emb_dropout=0.0, tie_embed=False):
+        super().__init__()
+        self.to_vector = nn.Linear(1, config.d_model)
+        self.to_vector_tech = nn.Linear(1, config.d_model)
+        self.transformer = HeynaModel(config)
+        self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
+        self.dropout = nn.Dropout(emb_dropout)
+
+    def forward(self, inputs, return_encodings=False):
+        x = inputs
         b, n = x.shape[0], x.shape[1]
         if len(x.shape) < 3:
             x = torch.unsqueeze(x, dim=2)
@@ -40,8 +50,10 @@ class scHeyna(nn.Module):
         return torch.squeeze(self.to_out(x))
 
 
+
 class MLPTranslator(nn.Module):
     """
+    from scTranslator https://github.com/TencentAILabHealthcare/scTranslator
     Class description: translator from RNA to protein
     fully connected layer with adjustable number of layers and variable dropout for each layer
 
@@ -131,33 +143,49 @@ class MLPTranslator(nn.Module):
 
 
 class scTrans(pl.LightningModule):
-    def __init__(
-            self,
-            enc_ret_config,
-            dec_ret_config,
-            encoder_ckpt_path,
-            decoder_ckpt_path,
-            lr=1e-4,
-            emb_dropout=0.0,
-    ):
+    def __init__(self, 
+            enc_ret_config, 
+            dec_ret_config, 
+            mode="RNA",
+            encoder_ckpt_path= None,
+            decoder_ckpt_path = None,
+            mask_prob=0.3, 
+            lr=1e-4, 
+            emb_dropout=0.0
+        ):
+        """
+        :param enc_ret_config: config for encoder
+        :param dec_ret_config: config for decoder
+        :param mode: "RNA", "protein", "RNA-protein
+        :param encoder_ckpt_path: path to the pre-trained encoder checkpoint
+        :param decoder_ckpt_path: path to the pre-trained decoder checkpoint
+        :param mask_prob: probability of masking the input data
+        :param lr: learning rate
+        :param emb_dropout: dropout rate for the embedding layer
+        """
+        if mode not in ["RNA", "protein", "RNA-protein"]:
+            raise ValueError("mode must be one of 'RNA', 'protein', or 'RNA-protein'")
         super().__init__()
+        self.mode = mode
+        self.mask_prob = mask_prob
         self.lr = lr
-        self.encoder = scHeyna(enc_ret_config, emb_dropout=emb_dropout, tie_embed=True)
-        self.decoder = scHeyna(dec_ret_config, emb_dropout=emb_dropout)
-        self.translator = MLPTranslator(
-            enc_ret_config.max_seq_len, dec_ret_config.max_seq_len, 2, 0.1
+        self.encoder = scHeyna_enc(
+            enc_ret_config, emb_dropout=emb_dropout, tie_embed=True
         )
-
-        self.load_encoder_decoder(encoder_ckpt_path, decoder_ckpt_path)
-
+        self.decoder = scHeyna_dec(
+            dec_ret_config, emb_dropout=emb_dropout
+        )
+        if (encoder_ckpt_path != None) and (decoder_ckpt_path != None):
+            self.load_encoder_decoder(encoder_ckpt_path, decoder_ckpt_path)
+            self.translator = MLPTranslator(enc_ret_config.max_seq_len, dec_ret_config.max_seq_len, 2, 0.1)
+        else:
+            self.translator = None
         self.cos_gene = nn.CosineSimilarity(dim=0, eps=1e-8)
         self.cos_cell = nn.CosineSimilarity(dim=1, eps=1e-8)
         self.epoch_train_loss_list = []
         self.epoch_val_loss_list = []
         self.test_emb_list = []
-        self.test_emb_mlp_list = []
         self.test_pred = []
-        self.recon_list = []
         self.save_hyperparameters()
 
     def load_encoder_decoder(self, encoder_ckpt_path, decoder_ckpt_path):
@@ -177,16 +205,20 @@ class scTrans(pl.LightningModule):
         }
         self.decoder.load_state_dict(decoder_state_dict, strict=False)
 
+
     def forward(self, seq_in):
         encodings = self.encoder(
             seq_in, return_encodings=True
         )  # batch_size, input_seq_lenth, dim
-        seq_out = (
-            self.translator(encodings.transpose(1, 2).contiguous())
-            .transpose(1, 2)
-            .contiguous()
-        )
-        return encodings, seq_out, self.decoder(seq_out)
+        if self.translator == None:
+            return encodings, self.decoder(encodings)
+        else:
+            seq_out = (
+                self.translator(encodings.transpose(1, 2).contiguous())
+                .transpose(1, 2)
+                .contiguous()
+            )
+            return encodings, seq_out, self.decoder(seq_out)
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.lr)
@@ -194,7 +226,7 @@ class scTrans(pl.LightningModule):
 
     def recon_loss(self, data, pred_data, mask_idx=None):
         if mask_idx is None:
-            return nn.functional.mse_loss(pred_data, data, reduction="mean")
+            return nn.functional.mse_loss(pred_data, data, reduction='mean')
         else:
             loss1 = self.masked_recon_loss(pred_data, data, mask_idx)
             return loss1
@@ -208,30 +240,23 @@ class scTrans(pl.LightningModule):
         recon_loss = average_error_per_row.mean()
         return recon_loss
 
-    def mask_data_with_condition(self, tensor, condition_matrix, mask_probability=0.4):
-        mask_non_zero = torch.rand_like(tensor) < mask_probability
-        mask_zero = torch.rand_like(tensor) < (mask_probability / 10.0)
-        mask_matrix = torch.where(tensor != 0, mask_non_zero, mask_zero)
-        mask_matrix = torch.where(
-            condition_matrix,
-            torch.zeros_like(mask_matrix, dtype=torch.bool),
-            mask_matrix,
-        )
-
-        return mask_matrix
 
     def training_step(self, batch, batch_idx):
-        x, y, mask_idx = batch[0], batch[1], batch[2]
-        embed, embed_mlp, recon = self(x)
-        recon_loss = self.recon_loss(y, recon, mask_idx)
-
-        corr_gene = self.cos_gene(y * mask_idx, recon * mask_idx).mean()
-        corr_cell = self.cos_cell(y * mask_idx, recon * mask_idx).mean()
+        if self.mode=="RNA-protein":
+            x, y, mask_final = batch[0], batch[1], batch[2]
+            embed, embed_mlp, recon = self(x)
+        elif self.mode=="RNA":
+            y = batch
+            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            embed, recon = self(mask_x)
+        elif self.mode == "protein":
+            y, b = batch
+            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            embed, recon = self(mask_x)
+        recon_loss = self.recon_loss(y, recon, mask_final)
 
         metrics = {
             "train/loss": recon_loss,
-            "train/corr_gene": corr_gene,
-            "train/corr_cell": corr_cell,
         }
         for key, value in metrics.items():
             self.log(
@@ -244,22 +269,28 @@ class scTrans(pl.LightningModule):
                 sync_dist=True,
             )
 
+
         return recon_loss
 
+
     def validation_step(self, batch, batch_idx):
-        x, y, mask_idx = batch[0], batch[1], batch[2]
-
-        embed, embed_mlp, recon = self(x)
-        recon_loss = self.recon_loss(y, recon, mask_idx)
-
-        corr_gene = self.cos_gene(y * mask_idx, recon * mask_idx).mean()
-        corr_cell = self.cos_cell(y * mask_idx, recon * mask_idx).mean()
+        if self.mode=="RNA-protein":
+            x, y, mask_final = batch[0], batch[1], batch[2]
+            embed, embed_mlp, recon = self(x)
+        elif self.mode=="RNA":
+            y = batch
+            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            embed, recon = self(mask_x)
+        elif self.mode == "protein":
+            y, b = batch
+            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            embed, recon = self(mask_x)
+        recon_loss = self.recon_loss(y, recon, mask_final)
 
         metrics = {
-            "valid/loss": recon_loss,
-            "valid/corr_gene": corr_gene,
-            "valid/corr_cell": corr_cell,
+            "valid_loss": recon_loss,
         }
+
         for key, value in metrics.items():
             self.log(
                 key,
@@ -273,19 +304,23 @@ class scTrans(pl.LightningModule):
 
         return {"val_loss": recon_loss}
 
+
     def test_step(self, batch, batch_idx):
-        x, y, self.mask_idx = batch[0], batch[1], batch[2]
-
-        self.embed, self.embed_mlp, self.recon = self(x)
-        recon_loss = self.recon_loss(y, self.recon, self.mask_idx)
-
-        corr_gene = self.cos_gene(y * self.mask_idx, self.recon * self.mask_idx).mean()
-        corr_cell = self.cos_cell(y * self.mask_idx, self.recon * self.mask_idx).mean()
+        if self.mode=="RNA-protein":
+            x, y, mask_final = batch[0], batch[1], batch[2]
+            embed, embed_mlp, recon = self(x)
+        elif self.mode=="RNA":
+            y = batch
+            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            embed, recon = self(mask_x)
+        elif self.mode == "protein":
+            y, b = batch
+            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            embed, recon = self(mask_x)
+        recon_loss = self.recon_loss(y, recon, mask_final)
 
         metrics = {
             "test/loss": recon_loss,
-            "test/corr_gene": corr_gene,
-            "test/corr_cell": corr_cell,
         }
 
         for key, value in metrics.items():
@@ -297,37 +332,16 @@ class scTrans(pl.LightningModule):
                 sync_dist=True,
             )
         self.test_emb_list.append(self.embed.detach().to("cpu").numpy())
-        self.test_emb_mlp_list.append(self.embed_mlp.detach().to("cpu").numpy())
-        self.recon_list.append(self.recon.detach().to("cpu").numpy())
 
         return {"test_loss": recon_loss}
 
-    def on_test_epoch_end(self):
-        test_emb_1 = np.concatenate(self.test_emb_list, axis=0)
-        emb_mean = np.mean(test_emb_1, axis=1)
-        for i in range(min(10, len(self.embed))):
-            self.plot_gene_umap(self.embed[i].detach().to("cpu").numpy())
-            self.plot_corr_gene(self.embed[i].detach().to("cpu").numpy())
-
-        test_emb_mlp = np.concatenate(self.test_emb_mlp_list, axis=0)
-        test_emb_mlp = test_emb_mlp[:, self.mask_idx[0, :].detach().to("cpu").numpy(), :]
-        emb_mean = np.mean(test_emb_mlp, axis=1)
-        for i in range(min(3, len(self.embed_mlp))):
-            self.plot_gene_umap(
-                self.embed_mlp[i][self.mask_idx[0, :].detach().to("cpu").numpy(), :].detach().to("cpu").numpy(),
-                name="Umap-Protein")
-
-        self.test_emb_list = []
-        self.test_pred = []
-
     def cluster(self, embed, reso=0.1):
         adata = sc.AnnData(embed)
-        sc.pp.neighbors(adata)
+        sc.pp.neighbors(adata, n_neighbors=20)
         sc.tl.louvain(adata, resolution=reso, random_state=0)
-        adata.obs["pred"] = adata.obs["louvain"]
-        return adata
+        return adata.obs["louvain"].astype(int).to_numpy()
 
-    def plot_gene_umap(self, emb, reso=0.5, name="umap-gene"):
+    def plot_gene_umap(self, emb, reso=0.5, name=""):
         adata = sc.AnnData(emb)
         sc.pp.neighbors(adata, n_neighbors=10, use_rep="X")
         sc.tl.umap(adata)
@@ -335,31 +349,5 @@ class scTrans(pl.LightningModule):
         adata.obs["label"] = adata.obs["louvain"].astype(int)
         adata.obs["label"] = adata.obs["label"].astype("category")
         fig = sc.pl.umap(adata, color=["label"], return_fig=True, show=False)
-        # self.logger.experiment.log({name: wandb.Image(fig, caption=name)})
-        self.logger.experiment.add_figure(name, fig)
+        self.logger.experiment.add_figure("umap_pros"+name, fig)
 
-    def plot_corr_gene(self, emb, gene_id=11150, name="Corr-Gene"):
-        # CD4 correlation
-        corr = cosine_similarity(emb)
-        CD4_corr = corr[gene_id,]
-        max_values_and_indices = sorted(
-            enumerate(CD4_corr.tolist()), key=lambda x: x[1], reverse=True
-        )[:10]
-        min_values_and_indices = sorted(
-            enumerate(CD4_corr.tolist()), key=lambda x: x[1]
-        )[:10]
-        max_indices, max_values = zip(*max_values_and_indices)
-        min_indices, min_values = zip(*min_values_and_indices)
-        gene_ann = pd.read_csv(
-            "./gene_order_ann.csv", index_col=0
-        )
-        max_corr = gene_ann.iloc[list(max_indices),]["symbol"].values
-        min_corr = gene_ann.iloc[list(min_indices),]["symbol"].values
-
-        CD4_corr = CD4_corr.reshape(-1, 1)
-        plt.figure(figsize=(6, 6))
-        fig = sns.clustermap(CD4_corr, col_cluster=False, row_cluster=True)
-        print(pd.DataFrame({"max_corr_gene": max_corr, "min_corr_gene": min_corr}))
-        self.logger.experiment.add_figure(name, fig.fig)
-        self.logger.experiment.add_text("Max corr", ', '.join(max_corr))
-        self.logger.experiment.add_text("Min corr", ', '.join(min_corr))

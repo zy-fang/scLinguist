@@ -18,7 +18,7 @@ class HyenaConfig(PretrainedConfig):
         short_filter_order=3,
         filter_order=64,
         activation_freq=1,
-        embed_dropout=0.1, # 没有被用到
+        embed_dropout=0.1, 
         hyena_dropout=0.0,
         hyena_filter_dropout=0.0,
         layer_norm_epsilon=1e-5,

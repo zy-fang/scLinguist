@@ -95,51 +95,6 @@ def sort(data):
         sorted_data[i, :] = data[i, row_indices]
     return sorted_data, sorted_indices
 
-
-# def clr(adata: AnnData, inplace: bool = True, axis: int = 0) -> Union[None, AnnData]:
-#     """
-#     Apply the centered log ratio (CLR) transformation
-#     to normalize counts in adata.X.
-
-#     Args:
-#         data: AnnData object with protein expression counts.
-#         inplace: Whether to update adata.X inplace.
-#         axis: Axis across which CLR is performed.
-#     """
-
-#     if axis not in [0, 1]:
-#         raise ValueError("Invalid value for `axis` provided. Admissible options are `0` and `1`.")
-
-#     if not inplace:
-#         adata = adata.copy()
-
-#     if issparse(adata.X) and axis == 0 and not isinstance(adata.X, csc_matrix):
-#         warn("adata.X is sparse but not in CSC format. Converting to CSC.")
-#         x = csc_matrix(adata.X)
-#     elif issparse(adata.X) and axis == 1 and not isinstance(adata.X, csr_matrix):
-#         warn("adata.X is sparse but not in CSR format. Converting to CSR.")
-#         x = csr_matrix(adata.X)
-#     else:
-#         x = adata.X
-
-#     if issparse(x):
-#         # print(list(np.log1p(x).sum(axis=axis).A))
-#         x.data /= np.repeat(
-#             np.exp(np.log1p(x).sum(axis=axis).A / x.shape[axis]), x.getnnz(axis=axis)
-#         )
-#         np.log1p(x.data, out=x.data)
-#     else:
-#         np.log1p(
-#             x / np.exp(np.log1p(x).sum(axis=axis, keepdims=True) / x.shape[axis]),
-#             out=x,
-#         )
-#     # print(x)
-
-#     adata.X = x
-
-#     return None if inplace else adata
-
-
 def max_min_normalization_with_nan(data):
     High = 1000000
     Low = 1
@@ -354,7 +309,6 @@ def citeseq(ts):
 
 
 def find_parquet_files(root_folder, suffix=".parquet"):
-    """ 在指定根文件夹及其子文件夹中查找所有的 .parquet 文件 """
     parquet_files = []
     for root, dirs, files in os.walk(root_folder):
         for file in files:
@@ -389,15 +343,6 @@ class spMultiDataset(Dataset):
             self.length,
         ) = self.load_all_data()
         self.fullmasks = self.load_mask_data()
-        # fullmasks = self.fullmasks[10]
-        # print(np.array(fullmasks[int(0)][:-1]))
-        # mask_position = np.array(fullmasks[int(0)][:-1])
-        # mask = np.zeros(6427)
-        # print(mask_position.shape)
-        # print(mask.shape)
-        # mask[mask_position] = 1
-        # mask = torch.tensor(mask, dtype=torch.int)
-        # mask = mask.squeeze()
 
     def __len__(self):
         return self.length
@@ -449,18 +394,13 @@ class spMultiDataset(Dataset):
     def load_mask_data(self):
         data_list = []
 
-        # for path in self.files:
         for path in self.masks:
             with open(path, "r") as f:
                 mask = json.load(f)
-            #     data_list.append(mask)
-
-            # data_arrayMASK = np.array(data_list)
             dataMatrix = np.array(list(mask.values()), dtype=object)
             data_list.append(dataMatrix)
 
         data_arrayMASK = np.array(data_list, dtype=object)
-        # print(data_arrayMASK)
         return data_arrayMASK
 
     def parquet_getitem(self, index, len_array, data_array, data_count):
@@ -477,10 +417,6 @@ class spMultiDataset(Dataset):
 
         data = np.zeros(data_count)
         data[pgenes] = pexps
-        # print(data)
-        # print(file_index)
-        # print(i)
-        # print(np.isnan(data).any())
         return data, file_index, i
 
     def __getitem__(self, index):
@@ -494,8 +430,6 @@ class spMultiDataset(Dataset):
         data_1 = data_1.squeeze()
 
         fullmask = self.fullmasks[i]
-        # print(fullmask)
-        # print(file_index)
         mask_position = np.array(fullmask[int(file_index)][:-1], dtype=int)
         mask = np.zeros(len(data_1))
         mask[mask_position] = 1
