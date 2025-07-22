@@ -4,7 +4,7 @@ import scanpy as sc
 from torch import nn as nn
 import pytorch_lightning as pl
 from scLinguist.model.modeling_hyena import HeynaModel
-from scLinguist.model.tokenizer import mask_data
+from scLinguist.model.tokenizer import mask_data_ADT, mask_data_RNA
 
 
 class scHeyna_dec(nn.Module):
@@ -248,11 +248,11 @@ class scTrans(pl.LightningModule):
             embed, embed_mlp, recon = self(x)
         elif self.mode=="RNA":
             y = batch
-            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_final = mask_data_RNA(batch, self.mask_prob)
             embed, recon = self(mask_x)
         elif self.mode == "protein":
             y, b = batch
-            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_idx, mask_final = mask_data_ADT(batch, self.mask_prob)
             embed, recon = self(mask_x)
         recon_loss = self.recon_loss(y, recon, mask_final)
 
