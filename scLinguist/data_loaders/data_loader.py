@@ -241,7 +241,8 @@ class scMultiDataset(Dataset):
         data_1 = torch.tensor(np.nan_to_num(data_1, nan=1e-8), dtype=torch.float32)
         data_1 = data_1.squeeze()
 
-        return data_1, mask_idx, 1
+        # return data_1, mask_idx, 1
+        return data, data_1, mask_idx
 
 
 def clr(adata: AnnData, inplace: bool = True, axis: int = 0) -> Union[None, AnnData]:

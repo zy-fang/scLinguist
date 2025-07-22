@@ -1,16 +1,17 @@
+from math import ceil
 import torch
 import scanpy as sc
 from torch import nn as nn
 import pytorch_lightning as pl
-from model.modeling_hyena import HeynaModel
-from model.tokenizer import mask_data
+from scLinguist.model.modeling_hyena import HeynaModel
+from scLinguist.model.tokenizer import mask_data
 
 
 class scHeyna_dec(nn.Module):
     def __init__(self, config, emb_dropout=0.0, tie_embed=False):
         super().__init__()
         self.to_vector = nn.Linear(1, config.d_model)
-        self.to_vector_tech = nn.Linear(1, config.d_model)
+        # self.to_vector_tech = nn.Linear(1, config.d_model)
         self.transformer = HeynaModel(config)
         self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
         self.dropout = nn.Dropout(emb_dropout)
@@ -31,7 +32,7 @@ class scHeyna_enc(nn.Module):
     def __init__(self, config, emb_dropout=0.0, tie_embed=False):
         super().__init__()
         self.to_vector = nn.Linear(1, config.d_model)
-        self.to_vector_tech = nn.Linear(1, config.d_model)
+        # self.to_vector_tech = nn.Linear(1, config.d_model)
         self.transformer = HeynaModel(config)
         self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
         self.dropout = nn.Dropout(emb_dropout)
