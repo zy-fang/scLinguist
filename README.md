@@ -1,4 +1,4 @@
-# SpaMosaic: a Foundation Model for Cross-Modality Translation in Single-Cell Omics
+# scLinguist: a Foundation Model for Cross-Modality Translation in Single-Cell Omics
 ## Overview
 In this work, we introduce scLinguist, a novel cross-modal foundation model based on an encoder–decoder architecture, designed to predict protein abundance from single-cell transcriptomic profiles. Drawing inspiration from multilingual translation models, scLinguist adopts a two-stage learning paradigm: it first performs modality-specific pretraining on large-scale unpaired omics data (e.g., RNA or protein) to capture intra-modality expression patterns, and then conducts post-pretraining on paired RNA–protein data to learn cross-modality mappings. This strategy enables the model to integrate knowledge from both data-rich and data-scarce scenarios, enhancing its generalizability and robustness across diverse biological contexts.
 
@@ -16,7 +16,7 @@ pip install -r requirements.txt
 pip install torch==2.1.1+cu121 -f https://download.pytorch.org/whl/torch_stable.html
 
 python setup.py install
-```
+
 
 ## Tutorial
 <!-- * [`finetune`](./integration_examples/horizontal) 
