@@ -10,7 +10,7 @@ setup(
     author='Min Li Lab',
     author_email='zy_fang@csu.edu.cn',
     description='a Foundation Model for Cross-Modality Translation in Single-Cell Omics',
-#     package_data={
-#         'scLinguist': ['configs/*.yaml']
-#     },
+    package_data={
+        'scLinguist': ['data/gene_order.csv']
+    },
 )

@@ -1,9 +1,10 @@
 import json
 import os
 import pyarrow.parquet as pq
-import scanpy
+import scanpy as sc
 import numpy as np
 import pandas as pd
+import anndata
 from torch.utils.data import DataLoader, Dataset
 from typing import Union
 from warnings import warn
@@ -137,14 +138,14 @@ class scRNADataset(Dataset):
 
         # for path in self.files:
         for path in [self.data_dir]:
-            adata = scanpy.read(path)
+            adata = sc.read(path)
             adata.var_names = adata.var.feature_id
             adata = adata[:, self.gene_order]
             # tmp = hierarchical_bayesian_downsampling_csr(adata.X)
             # adata = anndata.AnnData(tmp)
 
-            scanpy.pp.normalize_total(adata, target_sum=10000)
-            scanpy.pp.log1p(adata)
+            sc.pp.normalize_total(adata, target_sum=10000)
+            sc.pp.log1p(adata)
             data = adata.X
             # data = max_min_normalization(adata.X)
             # sorted_data, feature_id = sort(data.todense())
@@ -171,9 +172,23 @@ class scRNADataset(Dataset):
 
 
 class scMultiDataset(Dataset):
-    def __init__(self, data_dir_1, data_dir_2):
-        self.data_dir_1 = data_dir_1
-        self.data_dir_2 = data_dir_2
+    def __init__(self, data_dir_1=None, data_dir_2=None, adata_1=None, adata_2=None):
+        """
+        Initialize dataset from either file paths or AnnData objects.
+        At least one of (data_dir_1, adata_1) and one of (data_dir_2, adata_2) must be provided.
+        """
+        assert (data_dir_1 is not None or adata_1 is not None), "Provide data_dir_1 or adata_1"
+        assert (data_dir_2 is not None or adata_2 is not None), "Provide data_dir_2 or adata_2"
+        # Load adata objects
+        if adata_1 is None:
+            self.adata_1 = sc.read(data_dir_1)
+        else:
+            self.adata_1 = adata_1.copy()
+
+        if adata_2 is None:
+            self.adata_2 = sc.read(data_dir_2)
+        else:
+            self.adata_2 = adata_2.copy()
         (
             self.data_array,
             self.len_array,
@@ -189,22 +204,16 @@ class scMultiDataset(Dataset):
         data_list = []
         len_list = []
         length = 0
+        sc.pp.normalize_total(
+            self.adata_1,
+            target_sum=10000
+        )
+        sc.pp.log1p(self.adata_1)
+        data = self.adata_1.X
+        data_list.append(data)
 
-        # for path in self.files:
-        for path in [
-            self.data_dir_1
-        ]:
-            adata = scanpy.read(path)
-            scanpy.pp.normalize_total(
-                adata,
-                target_sum=10000
-            )
-            scanpy.pp.log1p(adata)
-            data = adata.X
-            data_list.append(data)
-
-            length += adata.shape[0]
-            len_list.append(length)
+        length += self.adata_1.shape[0]
+        len_list.append(length)
         data_array = np.array(data_list)
         len_array = np.array(len_list)
 
@@ -213,17 +222,14 @@ class scMultiDataset(Dataset):
         len_list = []
         length = 0
 
-        for path in [
-            self.data_dir_2
-        ]:
-            adata = scanpy.read(path)
-            data = adata.X.todense()
 
-            data = max_min_normalization_with_nan(data)
-            data_list.append(data)
+        data = self.adata_2.X.todense()
 
-            length += adata.shape[0]
-            len_list.append(length)
+        data = max_min_normalization_with_nan(data)
+        data_list.append(data)
+
+        length += self.adata_2.shape[0]
+        len_list.append(length)
         data_array_1 = np.array(data_list)
         len_array_1 = np.array(len_list)
 
@@ -769,3 +775,80 @@ class spMultiDataset(Dataset):
 
 
         return data, data_1, mask
+
+
+
+def merge_duplicate_features(adata: anndata.AnnData) -> anndata.AnnData:
+    """
+    Merge duplicated features in `adata` by summing expression values 
+    for the same feature_id across columns.
+    """
+    X_dense = adata.X.toarray()
+    feature_ids = adata.var["feature_id"].values
+
+    unique_ids, inverse_indices = np.unique(feature_ids, return_inverse=True)
+    merged_X = np.zeros((X_dense.shape[0], len(unique_ids)))
+
+    for i in range(X_dense.shape[0]):
+        merged_X[i] = np.bincount(
+            inverse_indices, weights=X_dense[i], minlength=len(unique_ids)
+        )
+
+    merged = anndata.AnnData(X=csr_matrix(merged_X))
+    merged.var["feature_id"] = unique_ids
+    merged.obs = adata.obs.copy()
+
+    return merged
+
+
+def sum_adata_by_feature_id(adata: anndata.AnnData) -> anndata.AnnData:
+    """
+    Sum expression values across duplicated feature_ids in columns.
+    Keeps unique features as-is and merges duplicated ones.
+    """
+    # Remove features without a valid ID
+    adata = adata[:, ~adata.var["feature_id"].isna()].copy()
+
+    feature_ids = adata.var["feature_id"]
+    unique_ids, inverse_indices, counts = np.unique(
+        feature_ids, return_inverse=True, return_counts=True
+    )
+
+    # Keep non-duplicated features
+    unique_mask = feature_ids.isin(unique_ids[counts == 1])
+    adata_unique = adata[:, unique_mask]
+
+    # Merge duplicated features
+    dup_mask = feature_ids.isin(unique_ids[counts > 1])
+    adata_dup = adata[:, dup_mask]
+    adata_merged = merge_duplicate_features(adata_dup)
+
+    # Combine both
+    return anndata.concat([adata_unique, adata_merged], axis=1)
+
+
+def align_and_merge_with_order(rna: anndata.AnnData, order: list) -> anndata.AnnData:
+    """
+    Aligns the input RNA AnnData object to a predefined gene order.
+
+    This function:
+    - Filters genes to keep only those in the target `order`
+    - Adds missing genes as all-0 dummy values to preserve column alignment
+    - Reorders columns to match the exact `order`
+    """
+    # Create a dummy row to enforce inclusion of all genes in `order`
+    dummy = anndata.AnnData(X=np.zeros((1, len(order))))
+    dummy.var_names = order
+    dummy.obs_names = ["__dummy__"]
+
+    # Keep only genes that appear in both `rna` and `order`
+    valid_genes = list(set(order) & set(rna.var_names))
+    rna = rna[:, valid_genes].copy()
+
+    # Concatenate dummy row and real data to ensure all genes in `order` are present
+    rna = sc.concat([dummy, rna], axis=0, join="outer")
+
+    # Drop the dummy row and reorder columns according to `order`
+    rna = rna[1:, dummy.var_names]
+
+    return rna

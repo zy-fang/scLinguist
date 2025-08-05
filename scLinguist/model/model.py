@@ -181,8 +181,6 @@ class scTrans(pl.LightningModule):
             self.translator = MLPTranslator(enc_ret_config.max_seq_len, dec_ret_config.max_seq_len, 2, 0.1)
         else:
             self.translator = None
-        self.cos_gene = nn.CosineSimilarity(dim=0, eps=1e-8)
-        self.cos_cell = nn.CosineSimilarity(dim=1, eps=1e-8)
         self.epoch_train_loss_list = []
         self.epoch_val_loss_list = []
         self.test_emb_list = []

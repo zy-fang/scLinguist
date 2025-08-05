@@ -28,36 +28,43 @@ def parser_args():
         "--train_data_path",
         type=str,
         default="./data/RNA/cell_gene",
+        help="path to the training data for RNA or protein mode",
     )
     parser.add_argument(
         "--test_data_path",
         type=str,
         default="./data/RNA/cell_gene",
+        help="path to the testing data for RNA or protein mode",
     )
     parser.add_argument(
         "--train_data_path_1",
         type=str,
         default="./data/RNA/cell_gene",
+        help="path to the training data for RNA-protein mode",
     )
     parser.add_argument(
         "--test_data_path_1",
         type=str,
         default="./data/RNA/cell_gene",
+        help="path to the testing data for RNA-protein mode",
     )
     parser.add_argument(
         "--mask_data_path",
         type=str,
         default="./data/RNA/cell_gene",
+        help="path to the mask data for RNA-protein mode",
     )
     parser.add_argument(
         "--mode",
         type=str,
         default="RNA",
+        help="mode: protein, RNA, or RNA-protein (default: RNA)",
     )
     parser.add_argument(
         "--save_path",
         type=str,
         default="./result2024",
+        help="path to save the model and results",
     )
     parser.add_argument(
         "--seed", type=int, default=42, help="random seed (default: 42)"
@@ -70,10 +77,10 @@ def parser_args():
     parser.add_argument(
         "--device", type=str, default=8, help="device = 'cpu' or '0' or '0,1,2,3'"
     )
-    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--lr", type=float, default=0.001, help="learning rate")
     parser.add_argument("--lrf", type=float, default=0.01)
-    parser.add_argument("--mask_prob", type=float, default=0.3)
-    parser.add_argument("--hyena_dropout", type=float, default=0.0)
+    parser.add_argument("--mask_prob", type=float, default=0.3, help="mask probability")
+    parser.add_argument("--hyena_dropout", type=float, default=0.0, help="hyena dropout")
     parser.add_argument(
         "--enc_vocab_len", type=int, default=6427, help="vocab length of encoder"
     )

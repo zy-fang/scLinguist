@@ -4,8 +4,9 @@ from importlib.metadata import version
 from rich.console import Console
 from rich.logging import RichHandler
 
-
-from . import module, model, pl, tl
+from .model import model
+from .data_loaders import data_loader
+from .model import modeling_hyena
 
 logger = logging.getLogger(__name__)
 # set the logging level
@@ -23,6 +24,8 @@ logger.addHandler(ch)
 # this prevents double outputs
 logger.propagate = False
 
-_all_ = ["model", "pl", "tl", "train"]
+_all_ = ["scTrans", "HyenaConfig", "scMultiDataset", "paProteinDataset", 
+         "paTESTProteinDataset_citeseq", "scRNADataset", "spRNADataset",
+           "spMultiDataset", "scMultiDataset"]
 
-# _version_ = version("chvae")
+# _version_ = version("scLinguist")
