@@ -11,7 +11,7 @@ class HyenaConfig(PretrainedConfig):
         use_bias=True,
         train_freq=True,
         max_seq_len=1024,
-        emb_dim=3,
+        emb_dim=5,
         n_layer=12,
         num_inner_mlps=2,
         hyena_order=2,

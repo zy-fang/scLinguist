@@ -35,7 +35,7 @@ def hierarchical_bayesian_downsampling(X, threshold=1000):
 
 #     return masked_tensor, mask_matrix
 
-def mask_data(tensor, mask_probability):
+def mask_data_RNA(tensor, mask_probability):
     # Create a mask for non-zero values with the given mask_probability
     mask_non_zero = torch.rand_like(tensor) < mask_probability
     # Create a mask for zero values with 1/10 of the mask_probability
@@ -47,6 +47,22 @@ def mask_data(tensor, mask_probability):
     masked_tensor = torch.where(mask_matrix, torch.full_like(tensor, -1), tensor)
 
     return masked_tensor, mask_matrix
+
+def mask_data_ADT(tensors, mask_probability):
+    _data, mask = tensors
+    min_data = min(_data[mask.type(torch.bool)])
+    # Create a mask for non-zero values with the given mask_probability
+    mask_non_zero = torch.rand_like(_data) < mask_probability
+    # Create a mask for zero values with 1/10 of the mask_probability
+    mask_zero = torch.rand_like(_data) < mask_probability
+    intersection_tensor = (_data != min_data) & mask.type(torch.bool)
+    # Combine masks so that the final mask is True if either condition is met
+    mask_matrix = torch.where(intersection_tensor, mask_non_zero, mask_zero)
+    # Apply the mask to the tensor
+    intersection_tensor = mask_matrix & mask.type(torch.bool)
+    masked_tensor = torch.where(intersection_tensor, torch.full_like(_data, 0), _data)
+
+    return masked_tensor, mask, intersection_tensor
 
 
 def data_tokenizer(gene_ids, datas, zero_gene=True):

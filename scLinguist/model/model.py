@@ -1,16 +1,17 @@
+from math import ceil
 import torch
 import scanpy as sc
 from torch import nn as nn
 import pytorch_lightning as pl
-from model.modeling_hyena import HeynaModel
-from model.tokenizer import mask_data
+from scLinguist.model.modeling_hyena import HeynaModel
+from scLinguist.model.tokenizer import mask_data_ADT, mask_data_RNA
 
 
 class scHeyna_dec(nn.Module):
     def __init__(self, config, emb_dropout=0.0, tie_embed=False):
         super().__init__()
         self.to_vector = nn.Linear(1, config.d_model)
-        self.to_vector_tech = nn.Linear(1, config.d_model)
+        # self.to_vector_tech = nn.Linear(1, config.d_model)
         self.transformer = HeynaModel(config)
         self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
         self.dropout = nn.Dropout(emb_dropout)
@@ -31,7 +32,7 @@ class scHeyna_enc(nn.Module):
     def __init__(self, config, emb_dropout=0.0, tie_embed=False):
         super().__init__()
         self.to_vector = nn.Linear(1, config.d_model)
-        self.to_vector_tech = nn.Linear(1, config.d_model)
+        # self.to_vector_tech = nn.Linear(1, config.d_model)
         self.transformer = HeynaModel(config)
         self.to_out = nn.Linear(config.d_model, 1) if not tie_embed else None
         self.dropout = nn.Dropout(emb_dropout)
@@ -180,8 +181,6 @@ class scTrans(pl.LightningModule):
             self.translator = MLPTranslator(enc_ret_config.max_seq_len, dec_ret_config.max_seq_len, 2, 0.1)
         else:
             self.translator = None
-        self.cos_gene = nn.CosineSimilarity(dim=0, eps=1e-8)
-        self.cos_cell = nn.CosineSimilarity(dim=1, eps=1e-8)
         self.epoch_train_loss_list = []
         self.epoch_val_loss_list = []
         self.test_emb_list = []
@@ -247,11 +246,11 @@ class scTrans(pl.LightningModule):
             embed, embed_mlp, recon = self(x)
         elif self.mode=="RNA":
             y = batch
-            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_final = mask_data_RNA(batch, self.mask_prob)
             embed, recon = self(mask_x)
         elif self.mode == "protein":
             y, b = batch
-            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_idx, mask_final = mask_data_ADT(batch, self.mask_prob)
             embed, recon = self(mask_x)
         recon_loss = self.recon_loss(y, recon, mask_final)
 
@@ -279,11 +278,11 @@ class scTrans(pl.LightningModule):
             embed, embed_mlp, recon = self(x)
         elif self.mode=="RNA":
             y = batch
-            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_final = mask_data_RNA(batch, self.mask_prob)
             embed, recon = self(mask_x)
         elif self.mode == "protein":
             y, b = batch
-            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_idx, mask_final = mask_data_ADT(batch, self.mask_prob)
             embed, recon = self(mask_x)
         recon_loss = self.recon_loss(y, recon, mask_final)
 
@@ -311,11 +310,11 @@ class scTrans(pl.LightningModule):
             embed, embed_mlp, recon = self(x)
         elif self.mode=="RNA":
             y = batch
-            mask_x, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_final = mask_data_RNA(batch, self.mask_prob)
             embed, recon = self(mask_x)
         elif self.mode == "protein":
             y, b = batch
-            mask_x, mask_idx, mask_final = mask_data(batch, self.mask_prob)
+            mask_x, mask_idx, mask_final = mask_data_ADT(batch, self.mask_prob)
             embed, recon = self(mask_x)
         recon_loss = self.recon_loss(y, recon, mask_final)
 
