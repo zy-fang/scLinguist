@@ -7,8 +7,8 @@
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
 
 project = 'scLinguist'
-copyright = '2025, Min Li Lab'
-author = 'Min Li Lab'
+copyright = '2025, scLinguist Team'
+author = 'scLinguist Team'
 release = '0.1.0'
 
 # -- General configuration ---------------------------------------------------
