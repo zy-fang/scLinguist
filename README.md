@@ -6,7 +6,7 @@ In this work, we introduce scLinguist, a novel cross-modal foundation model base
 ## Installation
 We tested our code on a server running Ubuntu 18.04.5 LTS, equipped with NVIDIA H100 GPUs.
 
-git clone https://github.com/xxxxx.git
+git clone https://github.com/OmicsML/scLinguist
 cd scLinguist
 conda create -n scLinguist python=3.8.8
 conda activate scLinguist
@@ -39,16 +39,9 @@ The pre-trained models can be downloaded from these links.
 ## Data
 Source of public datasets:
 1. BM dataset: [`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE128639) 
-2. BMMC dataset: {[`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=194122)}
-3. CBMC dataset: {[`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE10086)}
-4. PBMC dataset: {[`REAP-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE100501)}
+2. BMMC dataset: [`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=194122)
+3. CBMC dataset: [`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE10086)
+4. PBMC dataset: [`REAP-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE100501)
 5. Perturb dataset: [`ECCITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE15306)
-6. Heart dataset: {[`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE218392)}
+6. Heart dataset: [`CITE-seq`](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE218392)
 7. Spatial dataset: [`10X Visium`](https://www.10xgenomics.com/datasets/gene-protein-expression-library-of-human-tonsil-cytassist-ffpe-2-standard)
-
-We have compiled the public datasets into h5ad files. Please refer to [google driver](https://). 
-
-## Reproduce results presented in manuscript
-To reproduce scLinguist's results, please visit [`reproduce`](./reproduce/) folder.
-
-To reproduce compared methods' results, including [`scTranslator`](https://github.com/TencentAILabHealthcare/scTranslator), [`scButterfly`](https://github.com/BioX-NKU/scButterfly), [`TotalVI`](https://docs.scvi-tools.org/en/stable/tutorials/notebooks/multimodal/totalVI.html), [`scArches`](https://docs.scarches.org/en/latest/), please visit [`https://github.com/xxxx/scLinguist-notebooks`](https://github.com/xxxx/scLinguist-notebooks).

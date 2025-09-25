@@ -7,7 +7,7 @@ setup(
     include_package_data=True,
     url='',
     license='MIT',
-    author='Min Li Lab',
+    author='scLinguist Team',
     author_email='zy_fang@csu.edu.cn',
     description='a Foundation Model for Cross-Modality Translation in Single-Cell Omics',
     package_data={

@@ -8,14 +8,14 @@ scLinguist documentation
 
 ``scLinguist`` a transformer-based framework for RNA-to-protein prediction that follows a two-step training strategy. First, we pretrain modality-specific models on large-scale single-omics datasets using self-supervised learning to extract informative representations. Subsequently, we fine-tune the model on paired RNA-protein data, enabling accurate cross-modality translation. This training paradigm allows our model to leverage abundant single-omics data while effectively learning modality relationships from limited paired datasets. 
 
-.. figure:: _static/Figure1_V2.tiff
+.. figure:: /workflow.png
    :width: 80%
    :align: center
 
    Overview of scLinguist workflow
 
 Getting started with scLinguist
-------------------------------
+----------------------------------
 
 To begin using **scLinguist**, please refer to the following sections of the documentation:
 
@@ -30,6 +30,6 @@ To begin using **scLinguist**, please refer to the following sections of the doc
 
    install
    tutorials/index
-   dataset
+   datasets
    credits
 

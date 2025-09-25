@@ -1,22 +1,38 @@
 Tutorials
 =========
+This section provides several example tutorials for scLinguist.
 
-.. Tutorials
-We provide a example for finetuning and testing: 
+Finetuning Example
+------------------
+We provide an example for finetuning and testing: 
 
-- `In a dataset <./finetune.ipynb>`_
+- `Finetune <./finetune.ipynb>`_
 
-We provide a example for zero-shot learning: 
+Zero-shot Learning Example
+--------------------------
+We provide an example for zero-shot learning: 
 
-- `In a dataset <./zeroshot.ipynb>`_
+- `Zeroshot <./zeroshot.ipynb>`_
 
-We provide a example for few-shot learning: 
+Few-shot Learning Example
+-------------------------
+We provide an example for few-shot learning: 
 
-- `In a dataset <./fewshot.ipynb>`_
+- `Fewshot <./fewshot.ipynb>`_
 
+Additional Tutorials
+---------------------
+Other tutorials include:
+
+- `Imputation <tutorials/imputation.ipynb>`_
+- `Protein panel alignment <tutorials/protein_panel_paths_aligned.ipynb>`_
 
 .. toctree::
-   :maxdepth: 1
-   :titlesonly:
-   :caption: Imputation
-   :hidden:
+   :maxdepth: 2
+   :caption: All Tutorials
+
+   fewshot
+   finetune
+   imputation
+   protein_panel_paths_aligned
+   zeroshot
